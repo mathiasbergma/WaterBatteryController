@@ -9,9 +9,9 @@
 
 
 
-#define PWM_OUTPUT 6
-#define AMPSPIN A0
-#define TEMPPIN A2
+#define PWM_OUTPUT 6 //Output pin for PWN control
+#define AMPSPIN A0  //ADC pin for current measurement
+#define TEMPPIN A2  //ADC pin for temp measurement
 
 #define TICKTEMP 1/12 //Ticks per degree
 #define TANKSIZE 50
@@ -23,7 +23,7 @@
 
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
