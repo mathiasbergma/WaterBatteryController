@@ -1,13 +1,18 @@
 #include <Arduino.h>
 #include <PID_v1.h>
-
+#include <Adafruit_I2CDevice.h>
 #include <SPI.h>
 #include <Wire.h>
 #include "Timer.h" //Arduino library: Jack Christensen
+
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_SH1106.h>
 
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SH1106 display(OLED_RESET);
 
+#define LOGO16_GLCD_HEIGHT 64 
+#define LOGO16_GLCD_WIDTH  128 
 
 #define PWM_OUTPUT 6 //Output pin for PWN control
 #define AMPSPIN A0  //ADC pin for current measurement
@@ -21,13 +26,6 @@
 #define LONGPRESS   1000            //Longpress time
 #define SHORTPRESS  100             //Shortpress time
 
-
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //Define Variables we'll be connecting to
 double Setpoint, Input, Output;
@@ -50,7 +48,7 @@ double readI(int samples);
 double readT(int samples);
 
 byte ValResetPin = 5; //Wh reset pin
-int ampsmid = 511;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
+int ampsmid = 390;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
 double amps = 0.0;
 
 float battVolts;
@@ -77,19 +75,12 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
   
-
   t.every(1000, getBandgap);
-  
-  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3C for 128x32
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
-  }
 
+  display.begin(SH1106_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
 
   // Clear the buffer
   display.clearDisplay();
-
   
   //Get system voltage based on known internal reference
   getBandgap();
@@ -98,7 +89,7 @@ void setup()
 void loop()
 {
   amps = readI(AVERAGE);
-  temp = readT(200);
+  temp = readT(50);
   Input = amps;
 
   if (temp < 60)
@@ -114,14 +105,13 @@ void loop()
   
   PWMpercent = 100.0/256.0*Output;
 
+
   Serial.print(Input);
   Serial.print(",");
   Serial.print(PWMpercent);
   Serial.print(",");
   Serial.println(temp);
 
-  
- 
   if (!digitalRead(ValResetPin)) //If button pressed
    {
      pressed();
@@ -159,11 +149,12 @@ double readT(int samples)
   
   return (reading/samples) * TICKTEMP;
 }
+
 void printTopRight(float power)
 {
   display.setTextSize(1);
-  display.setCursor(88,0);
-  display.setTextColor(SSD1306_WHITE,SSD1306_BLACK); //Clear previous text and prevent flickering
+  display.setCursor(85,1);
+  display.setTextColor(WHITE,BLACK); //Clear previous text and prevent flickering
   rightJustified(power, 5, 3); //Print spaces for a 5 position number, decimal point included
   display.print(power);
   display.print("C");
@@ -172,36 +163,42 @@ void printTopRight(float power)
 void printTopMid(float val)
 {
   display.setTextSize(1);
-  display.setCursor(46,0);
-  display.setTextColor(SSD1306_WHITE,SSD1306_BLACK);
+  display.setCursor(46,1);
+  display.setTextColor(WHITE,BLACK);
   rightJustified(val, 1, 2);//Print spaces for a 5 position number, decimal point included
   display.print(val);
   display.print("V");
   display.display();
   return;
 }
+
 void printTopLeft(float amps)
 {
   display.setTextSize(1);
-  display.setCursor(0,0);
-  display.setTextColor(SSD1306_WHITE,SSD1306_BLACK); 
+  display.setCursor(0,1);
+  display.setTextColor(WHITE,BLACK); 
   rightJustified(amps, 2, 2);//Print spaces for a 4 position number, decimal point included
   display.print((amps)); 
   display.print("A");
   display.display();
+
   return;
 }
+
 void printButtom(float val,const char c[])
 {
   display.setTextSize(2);
-  display.setCursor(0,16);
-  display.setTextColor(SSD1306_WHITE,SSD1306_BLACK); 
+  display.setCursor(0,32);
+  display.setTextColor(WHITE,BLACK);
+  display.print("PWM: ");
   rightJustified(val, 3, 0);//Print spaces for a 7 position number, decimal point included
   display.print(val,0); 
   display.print(c);
   display.display();
+
   return;
 }
+
 void rightJustified(float num, int width, int dec) //Prints leading spaces
 {
   int numWidth = 0;
@@ -224,6 +221,7 @@ void rightJustified(float num, int width, int dec) //Prints leading spaces
   }
   return;
 }
+
 void getBandgap(void) //https://gist.github.com/ronnyandre/840cb7c8f872148681ebba6a8008c530
    {
        
