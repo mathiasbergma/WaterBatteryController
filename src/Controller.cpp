@@ -6,12 +6,15 @@
 #include "Timer.h" //Arduino library: Jack Christensen
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SH1106.h>
+#include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
+
+#define PIDSP -0.1
+
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SH1106 display(OLED_RESET);
 
-#define LOGO16_GLCD_HEIGHT 64 
+#define LOGO16_GLCD_HEIGHT 64
 #define LOGO16_GLCD_WIDTH  128 
 
 #define PWM_OUTPUT 6 //Output pin for PWN control
@@ -21,7 +24,7 @@ Adafruit_SH1106 display(OLED_RESET);
 #define TICKTEMP 1/12 //Ticks per degree
 #define TANKSIZE 50
 
-#define INTERNALREF 1083L           //Internal reference voltage
+#define INTERNALREF 1023L           //Internal reference voltage
 #define AVERAGE     1000            //Amount of averaging on all measurements        
 #define LONGPRESS   1000            //Longpress time
 #define SHORTPRESS  100             //Shortpress time
@@ -31,14 +34,14 @@ Adafruit_SH1106 display(OLED_RESET);
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp=20, Ki=1000, Kd=0.1;
+double Kp=1, Ki=100, Kd=0.1;
 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 Timer t;
 
 void printTopRight(float power);
-void rightJustified(float num, int width, int dec);
+void rightJustified(float num, int width, bool neg);
 void printButtom(float val,const char c[]);
 void printTopLeft(float amps);
 void printTopMid(float voltage);
@@ -48,8 +51,9 @@ double readI(int samples);
 double readT(int samples);
 
 byte ValResetPin = 5; //Wh reset pin
-int ampsmid = 390;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
+int ampsmid = 512;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
 double amps = 0.0;
+//int analogAmp;
 
 float battVolts;
 float amplification = 1;
@@ -61,7 +65,7 @@ void setup()
 {
   //initialize the variables we're linked to
   Input = amps;
-  Setpoint = 1.0;
+  Setpoint = PIDSP;
 
   //turn the PID on
   myPID.SetMode(AUTOMATIC);
@@ -75,9 +79,9 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
   
-  t.every(1000, getBandgap);
+  //t.every(1000, getBandgap);
 
-  display.begin(SH1106_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.begin(SH1106_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
 
   // Clear the buffer
   display.clearDisplay();
@@ -89,9 +93,9 @@ void setup()
 void loop()
 {
   amps = readI(AVERAGE);
-  temp = readT(50);
+  temp = readT(100);
   Input = amps;
-
+  //Serial.println(ampsmid);
   if (temp < 60)
   {
     myPID.Compute();
@@ -105,25 +109,26 @@ void loop()
   
   PWMpercent = 100.0/256.0*Output;
 
-
+/*
   Serial.print(Input);
   Serial.print(",");
   Serial.print(PWMpercent);
   Serial.print(",");
   Serial.println(temp);
-
+*/
   if (!digitalRead(ValResetPin)) //If button pressed
    {
      pressed();
    }
 
    
-  t.update();
+  //t.update();
   
   printTopLeft(amps);
-  //printTopMid(battVolts);
+  printTopMid(battVolts);
 
   printTopRight(temp);
+  //printButtom(analogAmp," ");
   printButtom(PWMpercent,"%");
 
   
@@ -136,7 +141,7 @@ double readI(int samples)
   {
     reading += analogRead(AMPSPIN) - ampsmid;
   }
-  
+  //analogAmp = analogRead(AMPSPIN);
   return reading = (reading/samples)/amplification;
 }
 double readT(int samples)
@@ -153,10 +158,10 @@ double readT(int samples)
 void printTopRight(float power)
 {
   display.setTextSize(1);
-  display.setCursor(85,1);
+  display.setCursor(100,1);
   display.setTextColor(WHITE,BLACK); //Clear previous text and prevent flickering
-  rightJustified(power, 5, 3); //Print spaces for a 5 position number, decimal point included
-  display.print(power);
+  rightJustified(power, 2, 0); //Print spaces for a 5 position number, decimal point included
+  display.print(power,0);
   display.print("C");
   display.display();
 }
@@ -165,7 +170,7 @@ void printTopMid(float val)
   display.setTextSize(1);
   display.setCursor(46,1);
   display.setTextColor(WHITE,BLACK);
-  rightJustified(val, 1, 2);//Print spaces for a 5 position number, decimal point included
+  rightJustified(val, 1, 0);//Print spaces for a 5 position number, decimal point included
   display.print(val);
   display.print("V");
   display.display();
@@ -177,8 +182,8 @@ void printTopLeft(float amps)
   display.setTextSize(1);
   display.setCursor(0,1);
   display.setTextColor(WHITE,BLACK); 
-  rightJustified(amps, 2, 2);//Print spaces for a 4 position number, decimal point included
-  display.print((amps)); 
+  rightJustified(amps, 2, 1);//Print spaces for a 4 position number, decimal point included
+  display.print(amps,1); 
   display.print("A");
   display.display();
 
@@ -199,26 +204,42 @@ void printButtom(float val,const char c[])
   return;
 }
 
-void rightJustified(float num, int width, int dec) //Prints leading spaces
+void rightJustified(float num, int width, bool neg) //Prints leading spaces
 {
   int numWidth = 0;
 
-  if (num < 10)
+  if (neg)
   {
-    numWidth += width - (1+dec);
+    numWidth = 1;
   }
-  else if (num > 10 && num < 99.5)
+
+  if (abs(num) < 9.5)
   {
-    numWidth += width - (2 + dec);
+    numWidth += width - 1;
   }
-  else if (num >= 99.5 && num < 1000)
+  else if (abs(num) > 9.5 && abs(num) < 99.5)
   {
-    numWidth += width - (3 + dec);
+    numWidth += width - 2;
   }
-  for (int i = 0; i < numWidth; i++)
+  else if (abs(num) >= 99.5 && abs(num) < 1000)
   {
-    display.print(" "); 
+    numWidth += width - 3;
   }
+  if (num >= 0)
+  {
+    for (int i = 0; i < numWidth; i++)
+    {
+      display.print(" "); 
+    }
+  }
+  else
+  {
+    for (int i = 1; i < numWidth; i++)
+    {
+      display.print(" "); 
+    }
+  }
+  
   return;
 }
 
@@ -242,12 +263,13 @@ void getBandgap(void) //https://gist.github.com/ronnyandre/840cb7c8f872148681ebb
 #endif
     delay(50);  // Let mux settle a little to get a more stable A/D conversion
        // Start a conversion  
-    ADCSRA |= _BV( ADSC );
-       // Wait for it to complete
-    while( ( (ADCSRA & (1<<ADSC)) != 0 ) );
-       // Scale the value
     for (int i = 0; i < AVERAGE; i++)
     {
+      ADCSRA |= _BV( ADSC );
+        // Wait for it to complete
+      while( ( (ADCSRA & (1<<ADSC)) != 0 ) );
+        // Scale the value
+    
       battVolts += (((InternalReferenceVoltage * 1024L) / ADC) + 5L) / 10L; // calculates for straight line value
     }
     battVolts /= AVERAGE;
