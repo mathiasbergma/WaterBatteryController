@@ -6,16 +6,19 @@
 #include "Timer.h" //Arduino library: Jack Christensen
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
+#include <Adafruit_SSD1306.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
+
 
 #define PIDSP -0.1
 
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SH1106 display(OLED_RESET);
+#define SCREEN_HEIGHT 64
+#define SCREEN_WIDTH  128 
 
-#define LOGO16_GLCD_HEIGHT 64
-#define LOGO16_GLCD_WIDTH  128 
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
 
 #define PWM_OUTPUT 6 //Output pin for PWN control
 #define AMPSPIN A0  //ADC pin for current measurement
@@ -81,7 +84,7 @@ void setup()
   
   //t.every(1000, getBandgap);
 
-  display.begin(SH1106_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
 
   // Clear the buffer
   display.clearDisplay();
@@ -180,7 +183,7 @@ void printTopMid(float val)
 void printTopLeft(float amps)
 {
   display.setTextSize(1);
-  display.setCursor(0,1);
+  display.setCursor(0,3);
   display.setTextColor(WHITE,BLACK); 
   rightJustified(amps, 2, 1);//Print spaces for a 4 position number, decimal point included
   display.print(amps,1); 
