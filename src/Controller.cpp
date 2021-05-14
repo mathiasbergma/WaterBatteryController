@@ -6,8 +6,9 @@
 #include "Timer.h" //Arduino library: Jack Christensen
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
+//#include <Adafruit_SSD1306.h> //Alternative library for different screen
 
+#include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
 
 #define PIDSP -0.1
 
@@ -16,8 +17,8 @@
 #define SCREEN_HEIGHT 64
 #define SCREEN_WIDTH  128 
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
+//Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SH1106 display(OLED_RESET);
 
 
 #define PWM_OUTPUT 6 //Output pin for PWN control
@@ -27,10 +28,14 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define TICKTEMP 1/12 //Ticks per degree
 #define TANKSIZE 50
 
-#define INTERNALREF 1023L           //Internal reference voltage
+#define INTERNALREF 1150L           //Internal reference voltage (Blue nano = 1095)
 #define AVERAGE     1000            //Amount of averaging on all measurements        
 #define LONGPRESS   1000            //Longpress time
 #define SHORTPRESS  100             //Shortpress time
+
+#define LOWTEMP 40.0 //Lower temperature limit
+#define SHEAT 4182.0 //Specific heat of water in Joule/degree/kg
+#define TOWATTHR 0.00027777777777778
 
 
 //Define Variables we'll be connecting to
@@ -43,11 +48,11 @@ PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 Timer t;
 
-void printTopRight(float power);
+void printTopRight(float val, const char c[]);
 void rightJustified(float num, int width, bool neg);
 void printButtom(float val,const char c[]);
-void printTopLeft(float amps);
-void printTopMid(float voltage);
+void printTopLeft(float val, const char c[]);
+void printTopMid(float val, const char c[]);
 void getBandgap(void); //https://gist.github.com/ronnyandre/840cb7c8f872148681ebba6a8008c530
 void pressed(void);
 double readI(int samples);
@@ -56,7 +61,9 @@ double readT(int samples);
 byte ValResetPin = 5; //Wh reset pin
 int ampsmid = 512;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
 double amps = 0.0;
-//int analogAmp;
+int analogAmp;
+
+double energy = 0;
 
 float battVolts;
 float amplification = 1;
@@ -84,7 +91,9 @@ void setup()
   
   //t.every(1000, getBandgap);
 
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
+  //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
+
+  display.begin(SH1106_SWITCHCAPVCC, 0x3C);
 
   // Clear the buffer
   display.clearDisplay();
@@ -110,15 +119,27 @@ void loop()
     analogWrite(PWM_OUTPUT, Output);
   }
   
+  //Calculate energy in tank
+  if (temp > 40)
+  {
+    energy = SHEAT * TANKSIZE * (temp - LOWTEMP) * TOWATTHR;
+  }
+  else
+  {
+    energy = 0;
+  }
+  
+
+
   PWMpercent = 100.0/256.0*Output;
 
-/*
+
   Serial.print(Input);
   Serial.print(",");
   Serial.print(PWMpercent);
   Serial.print(",");
   Serial.println(temp);
-*/
+
   if (!digitalRead(ValResetPin)) //If button pressed
    {
      pressed();
@@ -127,10 +148,10 @@ void loop()
    
   //t.update();
   
-  printTopLeft(amps);
-  printTopMid(battVolts);
+  printTopLeft(amps, "A");
+  printTopMid(energy, "Wh");
 
-  printTopRight(temp);
+  printTopRight(temp, "c");
   //printButtom(analogAmp," ");
   printButtom(PWMpercent,"%");
 
@@ -144,7 +165,7 @@ double readI(int samples)
   {
     reading += analogRead(AMPSPIN) - ampsmid;
   }
-  //analogAmp = analogRead(AMPSPIN);
+  analogAmp = analogRead(AMPSPIN);
   return reading = (reading/samples)/amplification;
 }
 double readT(int samples)
@@ -158,36 +179,36 @@ double readT(int samples)
   return (reading/samples) * TICKTEMP;
 }
 
-void printTopRight(float power)
+void printTopRight(float val, const char c[])
 {
   display.setTextSize(1);
-  display.setCursor(100,1);
+  display.setCursor(100,3);
   display.setTextColor(WHITE,BLACK); //Clear previous text and prevent flickering
-  rightJustified(power, 2, 0); //Print spaces for a 5 position number, decimal point included
-  display.print(power,0);
-  display.print("C");
+  rightJustified(val, 2, 0); //Print spaces for a 5 position number, decimal point included
+  display.print(val,0);
+  display.print(c);
   display.display();
 }
-void printTopMid(float val)
+void printTopMid(float val, const char c[])
 {
   display.setTextSize(1);
-  display.setCursor(46,1);
+  display.setCursor(46,3);
   display.setTextColor(WHITE,BLACK);
   rightJustified(val, 1, 0);//Print spaces for a 5 position number, decimal point included
   display.print(val);
-  display.print("V");
+  display.print(c);
   display.display();
   return;
 }
 
-void printTopLeft(float amps)
+void printTopLeft(float val, const char c[])
 {
   display.setTextSize(1);
   display.setCursor(0,3);
   display.setTextColor(WHITE,BLACK); 
-  rightJustified(amps, 2, 1);//Print spaces for a 4 position number, decimal point included
-  display.print(amps,1); 
-  display.print("A");
+  rightJustified(val, 2, 1);//Print spaces for a 4 position number, decimal point included
+  display.print(val,1); 
+  display.print(c);
   display.display();
 
   return;
@@ -277,7 +298,7 @@ void getBandgap(void) //https://gist.github.com/ronnyandre/840cb7c8f872148681ebb
     }
     battVolts /= AVERAGE;
     battVolts /=100;
-    amplification = (1024 / (battVolts*1000)) * 69;
+    amplification = (1024 / (5.0*1000)) * 69;
     return;
    }
    
