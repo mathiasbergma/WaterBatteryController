@@ -10,7 +10,7 @@
 
 #include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
 
-#define PIDSP -0.1
+#define PIDSP 0.1
 
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
