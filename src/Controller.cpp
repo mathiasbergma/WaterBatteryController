@@ -21,21 +21,19 @@
 Adafruit_SH1106 display(OLED_RESET);
 
 
-#define PWM_OUTPUT 6 //Output pin for PWN control
-#define AMPSPIN A0  //ADC pin for current measurement
-#define TEMPPIN A2  //ADC pin for temp measurement
+#define PWM_OUTPUT  6     //Output pin for PWN control
+#define AMPSPIN     A0    //ADC pin for current measurement
+#define TEMPPIN     A2    //ADC pin for temp measurement
 
-#define TICKTEMP 1/12 //Ticks per degree
-#define TANKSIZE 50
+#define TICKTEMP    1/12  //Ticks per degree
+#define TANKSIZE    50.0  //Used for energy calculation
 
-#define INTERNALREF 1150L           //Internal reference voltage (Blue nano = 1095)
-#define AVERAGE     1000            //Amount of averaging on all measurements        
-#define LONGPRESS   1000            //Longpress time
-#define SHORTPRESS  100             //Shortpress time
+#define AVERAGE     1000  //Amount of averaging on all measurements        
 
-#define LOWTEMP 40.0 //Lower temperature limit
-#define SHEAT 4182.0 //Specific heat of water in Joule/degree/kg
-#define TOWATTHR 0.00027777777777778
+
+#define LOWTEMP     40.0 //Lower temperature limit
+#define SHEAT       4182.0 //Specific heat of water in Joule/degree/kg
+#define TOWATTHR    0.00027777777777778
 
 
 //Define Variables we'll be connecting to
@@ -46,27 +44,24 @@ double Kp=1, Ki=100, Kd=0.1;
 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
-Timer t;
+
 
 void printTopRight(float val, const char c[]);
 void rightJustified(float num, int width, bool neg);
 void printButtom(float val,const char c[]);
 void printTopLeft(float val, const char c[]);
 void printTopMid(float val, const char c[]);
-void getBandgap(void); //https://gist.github.com/ronnyandre/840cb7c8f872148681ebba6a8008c530
-void pressed(void);
 double readI(int samples);
 double readT(int samples);
 
-byte ValResetPin = 5; //Wh reset pin
+
 int ampsmid = 512;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
 double amps = 0.0;
 int analogAmp;
 
 double energy = 0;
 
-float battVolts;
-float amplification = 1;
+double amplification = (1024 / 5000.0) * 69;
 double PWMpercent = 0;
 
 double temp = 0;
@@ -85,11 +80,8 @@ void setup()
   Serial.print("Output (%)");
   Serial.println("Temp");
 
-  pinMode(ValResetPin, INPUT_PULLUP);
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
-  
-  //t.every(1000, getBandgap);
 
   //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
 
@@ -97,9 +89,6 @@ void setup()
 
   // Clear the buffer
   display.clearDisplay();
-  
-  //Get system voltage based on known internal reference
-  getBandgap();
 }
 
 void loop()
@@ -133,26 +122,17 @@ void loop()
 
   PWMpercent = 100.0/256.0*Output;
 
-
+  //Send relevant data on Serial
   Serial.print(Input);
   Serial.print(",");
   Serial.print(PWMpercent);
   Serial.print(",");
   Serial.println(temp);
-
-  if (!digitalRead(ValResetPin)) //If button pressed
-   {
-     pressed();
-   }
-
-   
-  //t.update();
   
+  //Show information on screen
   printTopLeft(amps, "A");
   printTopMid(energy, "Wh");
-
   printTopRight(temp, "c");
-  //printButtom(analogAmp," ");
   printButtom(PWMpercent,"%");
 
   
@@ -188,6 +168,7 @@ void printTopRight(float val, const char c[])
   display.print(val,0);
   display.print(c);
   display.display();
+  return;
 }
 void printTopMid(float val, const char c[])
 {
@@ -265,56 +246,4 @@ void rightJustified(float num, int width, bool neg) //Prints leading spaces
   }
   
   return;
-}
-
-void getBandgap(void) //https://gist.github.com/ronnyandre/840cb7c8f872148681ebba6a8008c530
-   {
-       
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    // For mega boards
-    const long InternalReferenceVoltage = 1115L;  // Adjust this value to your boards specific internal BG voltage x1000
-       // REFS1 REFS0          --> 0 1, AVcc internal ref. -Selects AVcc reference
-       // MUX4 MUX3 MUX2 MUX1 MUX0  --> 11110 1.1V (VBG)         -Selects channel 30, bandgap voltage, to measure
-    ADMUX = (0<<REFS1) | (1<<REFS0) | (0<<ADLAR)| (0<<MUX5) | (1<<MUX4) | (1<<MUX3) | (1<<MUX2) | (1<<MUX1) | (0<<MUX0);
- 
-#else
-    // For 168/328 boards
-    const long InternalReferenceVoltage = INTERNALREF;  // Adjust this value to your boards specific internal BG voltage x1000
-       // REFS1 REFS0          --> 0 1, AVcc internal ref. -Selects AVcc external reference
-       // MUX3 MUX2 MUX1 MUX0  --> 1110 1.1V (VBG)         -Selects channel 14, bandgap voltage, to measure
-    ADMUX = (0<<REFS1) | (1<<REFS0) | (0<<ADLAR) | (1<<MUX3) | (1<<MUX2) | (1<<MUX1) | (0<<MUX0);
-     
-#endif
-    delay(50);  // Let mux settle a little to get a more stable A/D conversion
-       // Start a conversion  
-    for (int i = 0; i < AVERAGE; i++)
-    {
-      ADCSRA |= _BV( ADSC );
-        // Wait for it to complete
-      while( ( (ADCSRA & (1<<ADSC)) != 0 ) );
-        // Scale the value
-    
-      battVolts += (((InternalReferenceVoltage * 1024L) / ADC) + 5L) / 10L; // calculates for straight line value
-    }
-    battVolts /= AVERAGE;
-    battVolts /=100;
-    amplification = (1024 / (5.0*1000)) * 69;
-    return;
-   }
-   
-void pressed(void)
-{
-  long timeStart = millis(); //Start timestamp
-
-  while (!digitalRead(ValResetPin)) //Loop while pressed
-  {
-    continue;
-  }
-
-  long timeStop = millis(); //Stop timestamp
-
-  if (timeStop > timeStart + LONGPRESS) //If LONGPRESS time has passed
-  {
-    ampsmid = ampsmid + amps * amplification; //Calculate new zero point
-  }
 }
