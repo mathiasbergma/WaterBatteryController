@@ -10,7 +10,7 @@
 
 #include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
 
-#define PIDSP 0.1
+#define PIDSP 0.0
 
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -61,10 +61,12 @@ int analogAmp;
 
 double energy = 0;
 
-double amplification = (1024 / 5000.0) * 69;
+double amplification = (1024 / 5000.0) * 100;
 double PWMpercent = 0;
 
 double temp = 0;
+
+bool PIDon = false;
 
 void setup()
 {
@@ -77,8 +79,8 @@ void setup()
   
   Serial.begin(9600);
   Serial.print("Input (A),");
-  Serial.print("Output (%)");
-  Serial.println("Temp");
+  Serial.print("Output (%),");
+  Serial.println("Temp (c)");
 
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
@@ -94,10 +96,20 @@ void setup()
 void loop()
 {
   amps = readI(AVERAGE);
-  temp = readT(100);
+  temp = readT(200);
   Input = amps;
   //Serial.println(ampsmid);
-  if (temp < 60)
+
+  if (temp > 60)
+  {
+    PIDon = false;
+  }
+  if (temp < 58)
+  {
+    PIDon = true;
+  }
+
+  if (PIDon)
   {
     myPID.Compute();
     analogWrite(PWM_OUTPUT, Output);
@@ -173,10 +185,10 @@ void printTopRight(float val, const char c[])
 void printTopMid(float val, const char c[])
 {
   display.setTextSize(1);
-  display.setCursor(46,3);
+  display.setCursor(47,3);
   display.setTextColor(WHITE,BLACK);
-  rightJustified(val, 1, 0);//Print spaces for a 5 position number, decimal point included
-  display.print(val);
+  rightJustified(val, 4, 0);//Print spaces for a 5 position number, decimal point included
+  display.print(val,0);
   display.print(c);
   display.display();
   return;
