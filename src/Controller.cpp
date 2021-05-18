@@ -10,6 +10,9 @@
 
 #include <Adafruit_SH1106.h> //https://github.com/wonho-maker/Adafruit_SH1106.git
 
+
+Timer t;
+
 #define PIDSP 0.0
 
 
@@ -45,60 +48,76 @@ double Kp=1, Ki=100, Kd=0.1;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 
-
+void communicate();
 void printTopRight(float val, const char c[]);
 void rightJustified(float num, int width, bool neg);
 void printButtom(float val,const char c[]);
 void printTopLeft(float val, const char c[]);
 void printTopMid(float val, const char c[]);
-double readI(int samples);
-double readT(int samples);
+void readI(double *ptr, const int SAMPLES);
+void readTemp(double *ptr, const int SAMPLES);
 
 
 int ampsmid = 512;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
-double amps = 0.0;
-int analogAmp;
-
-double energy = 0;
-
 double amplification = (1024 / 5000.0) * 100;
 double PWMpercent = 0;
-
 double temp = 0;
-
 bool PIDon = false;
 
 void setup()
 {
   //initialize the variables we're linked to
-  Input = amps;
+  Input = 0.0;
   Setpoint = PIDSP;
 
   //turn the PID on
   myPID.SetMode(AUTOMATIC);
   
   Serial.begin(9600);
-  Serial.print("Input (A),");
-  Serial.print("Output (%),");
-  Serial.println("Temp (c)");
+  Serial.println("Input (A), Output (%), Temp (c)");
 
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
 
-  //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x64)
+  t.every(2000, communicate); // 2 seconds
 
-  display.begin(SH1106_SWITCHCAPVCC, 0x3C);
+  //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+
+  display.begin(SH1106_SWITCHCAPVCC, 0x3C); // initialize with the I2C addr 0x3C (for the 128x64)
 
   // Clear the buffer
   display.clearDisplay();
+
+  // initialize timer1 
+  noInterrupts();           // disable all interrupts
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+
+  OCR1A = 12500;            // compare match register 16MHz/256/5Hz
+  OCR1B = 62500;            // compare match register 16MHz/256/1Hz
+  TCCR1B |= (1 << WGM12);   // CTC mode
+  TCCR1B |= (1 << CS12);    // 256 prescaler 
+  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+
+  interrupts();             // enable all interrupts
+
+}
+
+
+ISR(TIMER1_COMPA_vect)      // timer compare B interrupt service routine
+{
+  readI(&Input, AVERAGE);
+}
+
+ISR(TIMER1_COMPB_vect)      // timer compare B interrupt service routine
+{
+  readTemp(&temp, AVERAGE);
 }
 
 void loop()
 {
-  amps = readI(AVERAGE);
-  temp = readT(200);
-  Input = amps;
-  //Serial.println(ampsmid);
+  double energy = 0;
 
   if (temp > 60)
   {
@@ -130,45 +149,49 @@ void loop()
     energy = 0;
   }
   
-
-
   PWMpercent = 100.0/256.0*Output;
 
-  //Send relevant data on Serial
-  Serial.print(Input);
-  Serial.print(",");
-  Serial.print(PWMpercent);
-  Serial.print(",");
-  Serial.println(temp);
+  
+  t.update();
   
   //Show information on screen
-  printTopLeft(amps, "A");
+  printTopLeft(Input, "A");
   printTopMid(energy, "Wh");
   printTopRight(temp, "c");
   printButtom(PWMpercent,"%");
 
   
 }
+void communicate()
+{
+  //Send relevant data on Serial
+  Serial.print(Input);
+  Serial.print(",");
+  Serial.print(PWMpercent);
+  Serial.print(",");
+  Serial.println(temp);
+}
 
-double readI(int samples)
+void readI(double *ptr, const int SAMPLES)
 {
   double reading = 0;
-  for (int i = 0; i < samples; i++)
+  for (int i = 0; i < SAMPLES; i++) //Perform reading
   {
     reading += analogRead(AMPSPIN) - ampsmid;
   }
-  analogAmp = analogRead(AMPSPIN);
-  return reading = (reading/samples)/amplification;
+  *ptr = (reading/SAMPLES)/amplification; //Calculate average and assign
+  return;
 }
-double readT(int samples)
+
+void readTemp(double *ptr, int SAMPLES)
 {
   double reading = 0;
-  for (int i = 0; i < samples; i++)
+  for (int i = 0; i < SAMPLES; i++) //Perform reading
   {
     reading += analogRead(TEMPPIN);
   }
-  
-  return (reading/samples) * TICKTEMP;
+  *ptr = (reading/SAMPLES) * TICKTEMP; //Calculate average and assign
+  return;
 }
 
 void printTopRight(float val, const char c[])
@@ -176,7 +199,7 @@ void printTopRight(float val, const char c[])
   display.setTextSize(1);
   display.setCursor(100,3);
   display.setTextColor(WHITE,BLACK); //Clear previous text and prevent flickering
-  rightJustified(val, 2, 0); //Print spaces for a 5 position number, decimal point included
+  rightJustified(val, 2, 0); //Print spaces for a 2 position number, decimal point included
   display.print(val,0);
   display.print(c);
   display.display();
