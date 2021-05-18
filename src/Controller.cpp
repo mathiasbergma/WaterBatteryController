@@ -43,7 +43,7 @@ Adafruit_SH1106 display(OLED_RESET);
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp=1, Ki=100, Kd=0.1;
+double Kp=20, Ki=700, Kd=0.1;
 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
@@ -74,7 +74,7 @@ void setup()
   myPID.SetMode(AUTOMATIC);
   
   Serial.begin(9600);
-  Serial.println("Input (A), Output (%), Temp (c)");
+ // Serial.println("Input (A), Output (%), Temp (c)");
 
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
@@ -95,7 +95,6 @@ void setup()
   TCNT1  = 0;
 
   OCR1A = 12500;            // compare match register 16MHz/256/5Hz
-  OCR1B = 62500;            // compare match register 16MHz/256/1Hz
   TCCR1B |= (1 << WGM12);   // CTC mode
   TCCR1B |= (1 << CS12);    // 256 prescaler 
   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
@@ -108,11 +107,7 @@ void setup()
 ISR(TIMER1_COMPA_vect)      // timer compare B interrupt service routine
 {
   readI(&Input, AVERAGE);
-}
-
-ISR(TIMER1_COMPB_vect)      // timer compare B interrupt service routine
-{
-  readTemp(&temp, AVERAGE);
+  readTemp(&temp, 200);
 }
 
 void loop()
