@@ -79,7 +79,7 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
 
-  t.every(2000, communicate); // 2 seconds
+  t.every(1000, communicate); // 2 seconds
 
   //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
@@ -94,7 +94,7 @@ void setup()
   TCCR1B = 0;
   TCNT1  = 0;
 
-  OCR1A = 6250;            // compare match register 16MHz/256/5Hz
+  OCR1A = 6250;            // compare match register 16MHz/256/10Hz
   TCCR1B |= (1 << WGM12);   // CTC mode
   TCCR1B |= (1 << CS12);    // 256 prescaler 
   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
@@ -160,6 +160,7 @@ void loop()
 void communicate()
 {
   //Send relevant data on Serial
+  Serial.print("D,");
   Serial.print(Input);
   Serial.print(",");
   Serial.print(PWMpercent);
