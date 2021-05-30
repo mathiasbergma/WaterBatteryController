@@ -13,7 +13,7 @@
 
 Timer t;
 
-#define PIDSP 0.0
+#define PIDSP -0.1
 
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -37,13 +37,14 @@ Adafruit_SH1106 display(OLED_RESET);
 #define LOWTEMP     40.0 //Lower temperature limit
 #define SHEAT       4182.0 //Specific heat of water in Joule/degree/kg
 #define TOWATTHR    0.00027777777777778
+#define AMPSMID 511
 
 
 //Define Variables we'll be connecting to
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp=20, Ki=700, Kd=0.1;
+double Kp=7, Ki=12, Kd=0.05;
 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
@@ -58,7 +59,7 @@ void readI(double *ptr, const int SAMPLES);
 void readTemp(double *ptr, const int SAMPLES);
 
 
-int ampsmid = 512;    //Value to withdraw from Amps ADC reading. Must be a variable  as the value is changed by long press "zeroing"
+
 double amplification = (1024 / 5000.0) * 100;
 double PWMpercent = 0;
 double temp = 0;
@@ -79,7 +80,7 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
 
-  t.every(1000, communicate); // 2 seconds
+  t.every(3000, communicate); // 2 seconds
 
   //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
@@ -173,7 +174,7 @@ void readI(double *ptr, const int SAMPLES)
   double reading = 0;
   for (int i = 0; i < SAMPLES; i++) //Perform reading
   {
-    reading += analogRead(AMPSPIN) - ampsmid;
+    reading += analogRead(AMPSPIN) - AMPSMID;
   }
   *ptr = (reading/SAMPLES)/amplification; //Calculate average and assign
   return;
