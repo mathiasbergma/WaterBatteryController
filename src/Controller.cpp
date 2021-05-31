@@ -29,12 +29,12 @@ Adafruit_SH1106 display(OLED_RESET);
 #define TEMPPIN     A2    //ADC pin for temp measurement
 
 #define TICKTEMP    1/12  //Ticks per degree
-#define TANKSIZE    50.0  //Used for energy calculation
+#define TANKSIZE    46.0  //Used for energy calculation
 
-#define AVERAGE     500  //Amount of averaging on all measurements        
+#define AVERAGE     500   //Amount of averaging on all measurements        
 
 
-#define LOWTEMP     40.0 //Lower temperature limit
+#define LOWTEMP     40.0  //Lower temperature limit
 #define SHEAT       4182.0 //Specific heat of water in Joule/degree/kg
 #define TOWATTHR    0.00027777777777778
 #define AMPSMID 511
@@ -80,7 +80,7 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
 
-  t.every(3000, communicate); // 2 seconds
+  t.every(3000, communicate); // 3 seconds
 
   //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
@@ -91,23 +91,21 @@ void setup()
 
   // initialize timer1 
   noInterrupts();           // disable all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
+  TCCR1A = 0;               // Timer Counter Control Register A
+  TCCR1B = 0;               // Timer Counter Control Register B
+  TCNT1  = 0;               // Timer Counter Register
 
-  OCR1A = 6250;            // compare match register 16MHz/256/10Hz
-  TCCR1B |= (1 << WGM12);   // CTC mode
-  TCCR1B |= (1 << CS12);    // 256 prescaler 
+  OCR1A = 62500;             // compare match register 16MHz/256/1Hz
+  TCCR1A |= (1 << WGM12);   // CTC mode (Clear Timer On Compare)
+  TCCR1A |= (1 << CS12);    // 256 prescaler 
   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
 
   interrupts();             // enable all interrupts
 
 }
 
-
 ISR(TIMER1_COMPA_vect)      // timer compare B interrupt service routine
 {
-  readI(&Input, AVERAGE);
   readTemp(&temp, 200);
 }
 
@@ -123,6 +121,8 @@ void loop()
   {
     PIDon = true;
   }
+
+  readI(&Input, AVERAGE);
 
   if (PIDon)
   {
