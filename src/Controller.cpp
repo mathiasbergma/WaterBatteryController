@@ -44,7 +44,7 @@ Adafruit_SH1106 display(OLED_RESET);
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp=7, Ki=12, Kd=0.05;
+double Kp=5, Ki=200, Kd=0.05;
 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
