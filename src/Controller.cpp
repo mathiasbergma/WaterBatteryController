@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <PID_v1.h>
+#include <PID_v1.h> //By Br3ttb https://github.com/br3ttb/Arduino-PID-Library/blob/master/PID_v1.h
 #include <Adafruit_I2CDevice.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -80,9 +80,8 @@ void setup()
   pinMode(AMPSPIN, INPUT);
   pinMode(TEMPPIN, INPUT);
 
-  t.every(3000, communicate); // 3 seconds
+  t.every(3000, communicate); // Create timer that will run specified function every 3 seconds
 
-  //display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
   display.begin(SH1106_SWITCHCAPVCC, 0x3C); // initialize with the I2C addr 0x3C (for the 128x64)
 
@@ -122,10 +121,12 @@ void loop()
     PIDon = true;
   }
 
+  //Update current meassurement before evaluating PID
   readI(&Input, AVERAGE);
 
   if (PIDon)
   {
+    //Compute PID. Will only update every 100 ms
     myPID.Compute();
     analogWrite(PWM_OUTPUT, Output);
   }
